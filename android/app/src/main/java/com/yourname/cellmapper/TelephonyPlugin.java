@@ -91,6 +91,28 @@ public class TelephonyPlugin extends Plugin {
         call.resolve(result);
     }
 
+    @PluginMethod
+    public void checkPermissions(PluginCall call) {
+        call.resolve(buildPermissionStatus());
+    }
+
+    @PluginMethod
+    public void requestPermissions(PluginCall call) {
+        JSObject status = buildPermissionStatus();
+        if (Boolean.TRUE.equals(status.get("granted"))) {
+            call.resolve(status);
+            return;
+        }
+
+        saveCall(call);
+        pluginRequestAllPermissions();
+    }
+
+    @PermissionCallback
+    private void telephonyPermissionCallback(PluginCall call) {
+        call.resolve(buildPermissionStatus());
+    }
+
     private void populateCellData(CellInfo info, JSObject out) {
         out.put("registered", info.isRegistered());
 
@@ -151,5 +173,18 @@ public class TelephonyPlugin extends Plugin {
         boolean coarseLocation = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean phoneState = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
         return (fineLocation || coarseLocation) && phoneState;
+    }
+
+    private JSObject buildPermissionStatus() {
+        Context ctx = getContext();
+        boolean fineLocation = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean coarseLocation = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean phoneState = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
+
+        JSObject res = new JSObject();
+        res.put("location", (fineLocation || coarseLocation) ? "granted" : "denied");
+        res.put("phone", phoneState ? "granted" : "denied");
+        res.put("granted", (fineLocation || coarseLocation) && phoneState);
+        return res;
     }
 }
