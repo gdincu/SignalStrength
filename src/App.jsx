@@ -40,12 +40,11 @@ export default function App() {
   const [isTracking, setIsTracking] = useState(false);
   const [readings, setReadings] = useState([]);
   const [currentPosition, setCurrentPosition] = useState([51.505, -0.09]);
-  const [status, setStatus] = useState('Ready');
   const [statusHistory, setStatusHistory] = useState([
     { id: 0, time: new Date().toLocaleTimeString(), text: 'Ready' },
   ]);
+  const [logExpanded, setLogExpanded] = useState(false);
   const [latest, setLatest] = useState(null);
-  const [permissionGranted, setPermissionGranted] = useState(false);
 
   const watchId = useRef(null);
   const intervalRef = useRef(null);
@@ -60,7 +59,6 @@ export default function App() {
   }, []);
 
   function pushStatus(message) {
-    setStatus(message);
     setStatusHistory((prev) =>
       [{ id: Date.now() + Math.random(), time: new Date().toLocaleTimeString(), text: message }, ...prev].slice(0, 10)
     );
@@ -75,7 +73,6 @@ export default function App() {
       const telephonyPerm = await checkTelephonyPermissions();
       const granted = telephonyPerm.granted === true;
       permissionGrantedRef.current = granted;
-      setPermissionGranted(granted);
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
         const suffix = telephonyPerm.error ? ` (${telephonyPerm.error})` : '';
@@ -93,7 +90,6 @@ export default function App() {
       const telephonyPerm = await requestTelephonyPermissions();
       const granted = telephonyPerm.granted === true;
       permissionGrantedRef.current = granted;
-      setPermissionGranted(granted);
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
         const suffix = telephonyPerm.error ? ` (${telephonyPerm.error})` : '';
@@ -108,7 +104,6 @@ export default function App() {
     } catch (err) {
       console.warn('Permission request failed', err);
       permissionGrantedRef.current = false;
-      setPermissionGranted(false);
       pushStatus(`Permission request failed: ${err.message || err}`);
     } finally {
       permissionRequestInFlight.current = false;
@@ -248,10 +243,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Cell Tower & Signal Mapper</h1>
+        <h1>SignalStrength</h1>
         <div className="status-bar">
           <span className={`status-dot ${isTracking ? 'active' : ''}`}></span>
-          <span>{status}</span>
+          <span>{isTracking ? 'Tracking' : 'Tracking paused'}</span>
         </div>
       </header>
 
@@ -322,23 +317,34 @@ export default function App() {
       </div>
 
       <div className="status-history">
-        <div className="status-history-header">
-          <strong>Status log</strong>
-          <button onClick={clearStatusHistory} className="secondary small">
-            Clear log
-          </button>
-        </div>
-        {statusHistory.length === 0 ? (
-          <p className="status-history-empty">No messages yet.</p>
-        ) : (
-          <ul>
-            {statusHistory.map((entry) => (
-              <li key={entry.id}>
-                <span className="status-time">{entry.time}</span>
-                <span>{entry.text}</span>
-              </li>
-            ))}
-          </ul>
+        <button
+          className="status-history-toggle"
+          onClick={() => setLogExpanded((v) => !v)}
+          aria-expanded={logExpanded}
+        >
+          <strong>Status log ({statusHistory.length})</strong>
+          <span className="toggle-icon">{logExpanded ? '▾' : '▸'}</span>
+        </button>
+        {logExpanded && (
+          <>
+            <div className="status-history-actions">
+              <button onClick={clearStatusHistory} className="secondary small">
+                Clear log
+              </button>
+            </div>
+            {statusHistory.length === 0 ? (
+              <p className="status-history-empty">No messages yet.</p>
+            ) : (
+              <ul>
+                {statusHistory.map((entry) => (
+                  <li key={entry.id}>
+                    <span className="status-time">{entry.time}</span>
+                    <span>{entry.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
 
