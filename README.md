@@ -86,6 +86,11 @@ In Android Studio, build the debug APK with **Build → Build Bundle(s) / APK(s)
   - Lime: -95 dBm ≤ RSRP < -80 dBm
   - Yellow: -110 dBm ≤ RSRP < -95 dBm
   - Red: RSRP < -110 dBm
+- Signal quality color coding:
+  - Green: RSRQ ≥ -10 dB
+  - Lime: -15 dB ≤ RSRQ < -10 dB
+  - Yellow: -20 dB ≤ RSRQ < -15 dB
+  - Red: RSRQ < -20 dB
 ## License
 
 MIT
