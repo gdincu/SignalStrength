@@ -66,7 +66,7 @@ npm run preview
 Make sure you have:
 
 - Android Studio
-- JDK 17 or newer
+- JDK 21 or newer
 - Android SDK
 
 ```bash
@@ -84,7 +84,7 @@ The workflow in `.github/workflows/deploy.yml` runs on every push to `main`:
 1. Installs Node.js 22 and dependencies
 2. Builds the React app
 3. Syncs Capacitor with the Android project
-4. Installs Java 17
+4. Installs Java 21
 5. Builds a debug APK with Gradle
 6. Copies the APK to `public_pages/SignalStrength.apk`
 7. Generates a download page
