@@ -1,4 +1,4 @@
-package com.yourname.cellmapper;
+package com.gdincu.signalstrength;
 
 import android.Manifest;
 import android.content.Context;

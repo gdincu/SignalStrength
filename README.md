@@ -30,7 +30,7 @@ SignalStrength/
 │   ├── telephony.js      # Capacitor bridge to TelephonyPlugin
 │   └── ...
 ├── android/
-│   └── app/src/main/java/com/yourname/cellmapper/
+│   └── app/src/main/java/com/gdincu/signalstrength/
 │       └── TelephonyPlugin.java
 ├── .github/workflows/
 │   └── deploy.yml        # Build & deploy APK to gh-pages
@@ -76,13 +76,6 @@ npx cap open android
 ```
 
 In Android Studio, build the debug APK with **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
-
-## Customization
-
-- Change the app ID from `com.yourname.cellmapper` to your own reverse-domain identifier in:
-  - `capacitor.config.json`
-  - `android/app/build.gradle`
-- The CI builds an unsigned debug APK. For Play Store release, configure a signing keystore and use `assembleRelease`.
 
 ## Notes
 
