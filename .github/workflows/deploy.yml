@@ -50,7 +50,7 @@ jobs:
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Cell Tower Mapper</title>
+            <title>SignalStrength</title>
             <style>
               * { box-sizing: border-box; }
               body {
@@ -87,7 +87,7 @@ jobs:
             </style>
           </head>
           <body>
-            <h1>Cell Tower Mapper</h1>
+            <h1>SignalStrength</h1>
             <p>Download the latest Android build and start mapping LTE/5G signal strength in your area.</p>
             <a class="btn" href="./SignalStrength.apk" download>Download APK</a>
             <ul class="steps">
