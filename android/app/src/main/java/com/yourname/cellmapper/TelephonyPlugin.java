@@ -43,7 +43,7 @@ public class TelephonyPlugin extends Plugin {
 
     @PluginMethod
     public void getNetworkMetrics(PluginCall call) {
-        if (!hasRequiredPermissions()) {
+        if (!hasTelephonyPermissions()) {
             call.reject("Location and READ_PHONE_STATE permissions are required to read cell info.");
             return;
         }
@@ -93,7 +93,7 @@ public class TelephonyPlugin extends Plugin {
 
     @PluginMethod
     public void requestPermissions(PluginCall call) {
-        if (hasRequiredPermissions()) {
+        if (hasTelephonyPermissions()) {
             JSObject res = new JSObject();
             res.put("granted", true);
             call.resolve(res);
@@ -107,7 +107,7 @@ public class TelephonyPlugin extends Plugin {
     @PermissionCallback
     private void telephonyPermissionCallback(PluginCall call) {
         JSObject res = new JSObject();
-        res.put("granted", hasRequiredPermissions());
+        res.put("granted", hasTelephonyPermissions());
         call.resolve(res);
     }
 
@@ -165,7 +165,7 @@ public class TelephonyPlugin extends Plugin {
         }
     }
 
-    private boolean hasRequiredPermissions() {
+    private boolean hasTelephonyPermissions() {
         Context ctx = getContext();
         boolean fineLocation = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarseLocation = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
