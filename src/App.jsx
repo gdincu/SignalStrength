@@ -1,39 +1,61 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { saveReading, getReadings, clearReadings, exportGeoJSON } from './db';
-import { getNetworkMetrics, normalizeSignal, getRsrpColor, getRsrqColor, requestTelephonyPermissions, checkTelephonyPermissions } from './telephony';
+import { getNetworkMetrics, normalizeSignal, getRsrpColor, getRsrqColor, getSignalColor, requestTelephonyPermissions, checkTelephonyPermissions } from './telephony';
 import './App.css';
 
-// Fix Leaflet default marker icons in bundled builds.
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
+const MAX_MARKERS = 200;
 
-function createSignalIcon(rsrp) {
-  const color = getRsrpColor(rsrp);
-  return L.divIcon({
-    className: 'signal-marker',
-    html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-    popupAnchor: [0, -7],
-  });
+// Cache divIcons by color bucket (only ~5 exist) instead of creating a new
+// L.divIcon for every marker on every render.
+const signalIconCache = new Map();
+function getCachedSignalIcon(signal) {
+  const color = getSignalColor(signal);
+  let icon = signalIconCache.get(color);
+  if (!icon) {
+    icon = L.divIcon({
+      className: 'signal-marker',
+      html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+      popupAnchor: [0, -7],
+    });
+    signalIconCache.set(color, icon);
+  }
+  return icon;
 }
 
-function MapAutoPan({ position }) {
+function MapFollowController({ position, enabled, onUserDrag }) {
   const map = useMap();
   useEffect(() => {
-    if (position) {
+    if (enabled && position) {
       map.panTo(position);
     }
-  }, [position, map]);
+  }, [position, enabled, map]);
+  useEffect(() => {
+    if (!onUserDrag) return undefined;
+    const handleDragStart = () => onUserDrag();
+    map.on('dragstart', handleDragStart);
+    return () => {
+      map.off('dragstart', handleDragStart);
+    };
+  }, [map, onUserDrag]);
   return null;
+}
+
+function rsrpLabel(rsrp) {
+  if (rsrp == null) return '— dBm';
+  return `${rsrp} dBm`;
+}
+
+function signalStrengthLabel(signal) {
+  if (!signal) return '— dBm';
+  if (signal.rsrp != null) return `${signal.rsrp} dBm`;
+  if (signal.dbm != null) return `${signal.dbm} dBm`;
+  return '— dBm';
 }
 
 export default function App() {
@@ -45,30 +67,54 @@ export default function App() {
   ]);
   const [logExpanded, setLogExpanded] = useState(false);
   const [latest, setLatest] = useState(null);
+  const [followMode, setFollowMode] = useState(true);
 
-  const watchId = useRef(null);
   const intervalRef = useRef(null);
   const shouldStartAfterPermission = useRef(false);
   const permissionGrantedRef = useRef(false);
   const permissionRequestInFlight = useRef(false);
+  const isCapturingRef = useRef(false);
+  const statusIdRef = useRef(1);
 
-  useEffect(() => {
-    loadHistory();
-    checkPermissions();
-    return () => stopTracking();
+  const pushStatus = useCallback((message) => {
+    const id = statusIdRef.current++;
+    setStatusHistory((prev) =>
+      [{ id, time: new Date().toLocaleTimeString(), text: message }, ...prev].slice(0, 10)
+    );
   }, []);
 
-  function pushStatus(message) {
-    setStatusHistory((prev) =>
-      [{ id: Date.now() + Math.random(), time: new Date().toLocaleTimeString(), text: message }, ...prev].slice(0, 10)
-    );
-  }
-
-  function clearStatusHistory() {
+  const clearStatusHistory = useCallback(() => {
     setStatusHistory([]);
-  }
+  }, []);
 
-  async function checkPermissions() {
+  const stopTracking = useCallback(() => {
+    const wasActive = intervalRef.current != null;
+    setIsTracking(false);
+    isCapturingRef.current = false;
+    if (wasActive) {
+      pushStatus('Tracking paused');
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, [pushStatus]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const data = await getReadings();
+      setReadings(data);
+      if (data.length > 0) {
+        const last = data[data.length - 1];
+        setCurrentPosition([last.lat, last.lng]);
+        setLatest(data[data.length - 1]);
+      }
+    } catch (err) {
+      pushStatus(`Failed to load history: ${err?.message || err}`);
+    }
+  }, [pushStatus]);
+
+  const checkPermissions = useCallback(async () => {
     try {
       const telephonyPerm = await checkTelephonyPermissions();
       const granted = telephonyPerm.granted === true;
@@ -81,9 +127,120 @@ export default function App() {
     } catch (err) {
       console.warn('Permission check failed', err);
     }
-  }
+  }, [pushStatus]);
 
-  async function requestPermissions() {
+  // Defined before effects so the React Compiler / oxlint doesn't flag
+  // reads-during-initialization.
+  useEffect(() => {
+    loadHistory();
+    checkPermissions();
+    const handleVisibility = () => {
+      // Permission may have been granted in system Settings while away.
+      if (document.visibilityState === 'visible') {
+        checkPermissions();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+      stopTracking();
+    };
+  }, [loadHistory, checkPermissions, stopTracking]);
+
+  const capturePoint = useCallback(async (position) => {
+    const { latitude: lat, longitude: lng, accuracy } = position.coords;
+    let metrics;
+    try {
+      metrics = await getNetworkMetrics();
+    } catch (err) {
+      metrics = { error: err?.message || String(err) };
+    }
+
+    const signal = metrics?.error ? null : normalizeSignal(metrics);
+    const timestamp = Date.now();
+
+    // Keep the GPS fix even when the cell read fails — otherwise the route
+    // gets gaps exactly where signal is worst (the data we most want).
+    // `raw`/allCells intentionally omitted to keep IndexedDB small at 1 pt/sec.
+    const reading = {
+      ...(signal ?? {}),
+      lat,
+      lng,
+      accuracy: accuracy ?? null,
+      timestamp,
+      rsrp: signal?.rsrp ?? null,
+      rsrq: signal?.rsrq ?? null,
+      type: signal?.type ?? 'UNKNOWN',
+      cellId: signal?.cellId ?? null,
+      pci: signal?.pci ?? null,
+      tac: signal?.tac ?? null,
+      mcc: signal?.mcc ?? null,
+      mnc: signal?.mnc ?? null,
+      ...(metrics?.error ? { error: metrics.error } : {}),
+    };
+
+    try {
+      const id = await saveReading(reading);
+      const saved = { ...reading, id };
+      setReadings((prev) => [...prev, saved]);
+      setCurrentPosition([lat, lng]);
+      setLatest(saved);
+      if (metrics?.error) {
+        pushStatus(`Captured GPS, cell unavailable: ${metrics.error}`);
+      } else {
+        pushStatus(`Captured ${signal?.type || '—'} @ ${signalStrengthLabel(signal)}`);
+      }
+    } catch (err) {
+      setCurrentPosition([lat, lng]);
+      pushStatus(`Save failed: ${err?.message || err}`);
+    }
+  }, [pushStatus]);
+
+  const captureFromGeolocation = useCallback(() => {
+    if (isCapturingRef.current) return;
+    if (!navigator.geolocation) {
+      pushStatus('Geolocation not supported on this device.');
+      return;
+    }
+
+    isCapturingRef.current = true;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await capturePoint(pos);
+        } finally {
+          isCapturingRef.current = false;
+        }
+      },
+      (err) => {
+        isCapturingRef.current = false;
+        const codeNames = {
+          1: 'Permission denied',
+          2: 'Position unavailable',
+          3: 'Timeout',
+        };
+        pushStatus(`GPS error ${err.code}: ${codeNames[err.code] || err.message}`);
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+    );
+  }, [capturePoint, pushStatus]);
+
+  const beginTracking = useCallback(() => {
+    if (intervalRef.current) return;
+    setIsTracking(true);
+    pushStatus('Tracking started…');
+
+    // Capture immediately, then every second (skipped while previous
+    // capture is still pending — see isCapturingRef guard).
+    captureFromGeolocation();
+    intervalRef.current = setInterval(() => {
+      captureFromGeolocation();
+    }, 1000);
+  }, [captureFromGeolocation, pushStatus]);
+
+  const requestPermissions = useCallback(async () => {
     if (permissionRequestInFlight.current) return;
     permissionRequestInFlight.current = true;
     try {
@@ -91,6 +248,7 @@ export default function App() {
       const granted = telephonyPerm.granted === true;
       permissionGrantedRef.current = granted;
       if (!granted) {
+        shouldStartAfterPermission.current = false;
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
         const suffix = telephonyPerm.error ? ` (${telephonyPerm.error})` : '';
         pushStatus(`Permissions required (${details})${suffix}`);
@@ -104,60 +262,12 @@ export default function App() {
     } catch (err) {
       console.warn('Permission request failed', err);
       permissionGrantedRef.current = false;
+      shouldStartAfterPermission.current = false;
       pushStatus(`Permission request failed: ${err.message || err}`);
     } finally {
       permissionRequestInFlight.current = false;
     }
-  }
-
-  async function loadHistory() {
-    const data = await getReadings();
-    setReadings(data);
-    if (data.length > 0) {
-      const last = data[data.length - 1];
-      setCurrentPosition([last.lat, last.lng]);
-    }
-  }
-
-  async function capturePoint(position) {
-    const { latitude: lat, longitude: lng, accuracy } = position.coords;
-    const metrics = await getNetworkMetrics();
-
-    if (metrics?.error) {
-      setCurrentPosition([lat, lng]);
-      pushStatus(`Cell error: ${metrics.error}`);
-      return;
-    }
-
-    const signal = normalizeSignal(metrics);
-
-    const reading = {
-      lat,
-      lng,
-      accuracy: accuracy ?? null,
-      timestamp: Date.now(),
-      rsrp: signal?.rsrp ?? null,
-      rsrq: signal?.rsrq ?? null,
-      type: signal?.type ?? 'UNKNOWN',
-      cellId: signal?.cellId ?? null,
-      pci: signal?.pci ?? null,
-      tac: signal?.tac ?? null,
-      mcc: signal?.mcc ?? null,
-      mnc: signal?.mnc ?? null,
-      raw: metrics,
-    };
-
-    await saveReading(reading);
-    setReadings((prev) => [...prev, reading]);
-    setCurrentPosition([lat, lng]);
-    setLatest(reading);
-    pushStatus(`Captured ${signal?.type || '—'} @ ${rsrpLabel(signal?.rsrp)}`);
-  }
-
-  function rsrpLabel(rsrp) {
-    if (rsrp == null) return '— dBm';
-    return `${rsrp} dBm`;
-  }
+  }, [beginTracking, pushStatus]);
 
   function startTracking() {
     if (intervalRef.current) return;
@@ -170,75 +280,42 @@ export default function App() {
     beginTracking();
   }
 
-  function beginTracking() {
-    if (intervalRef.current) return;
-    setIsTracking(true);
-    pushStatus('Tracking started…');
-
-    // Capture immediately, then every second if geolocation hasn't changed.
-    captureFromGeolocation();
-    intervalRef.current = setInterval(() => {
-      captureFromGeolocation();
-    }, 1000);
-  }
-
-  function captureFromGeolocation() {
-    if (!navigator.geolocation) {
-      pushStatus('Geolocation not supported on this device.');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => capturePoint(pos),
-      (err) => {
-        const codeNames = {
-          1: 'Permission denied',
-          2: 'Position unavailable',
-          3: 'Timeout',
-        };
-        pushStatus(`GPS error ${err.code}: ${codeNames[err.code] || err.message}`);
-      },
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
-    );
-  }
-
-  function stopTracking() {
-    const wasActive = intervalRef.current != null;
-    setIsTracking(false);
-    if (wasActive) {
-      pushStatus('Tracking paused');
-    }
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    if (watchId.current) {
-      navigator.geolocation.clearWatch(watchId.current);
-      watchId.current = null;
-    }
-  }
+  const handleDisableFollow = useCallback(() => {
+    setFollowMode(false);
+  }, []);
 
   async function handleClear() {
     if (!confirm('Clear all saved readings?')) return;
-    await clearReadings();
-    setReadings([]);
-    setLatest(null);
-    pushStatus('History cleared');
+    try {
+      await clearReadings();
+      setReadings([]);
+      setLatest(null);
+      pushStatus('History cleared');
+    } catch (err) {
+      pushStatus(`Clear failed: ${err?.message || err}`);
+    }
   }
 
   async function handleExport() {
-    const geojson = await exportGeoJSON();
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `signal-strength-${new Date().toISOString().slice(0, 10)}.geojson`;
-    a.click();
-    URL.revokeObjectURL(url);
-    pushStatus('GeoJSON exported');
+    try {
+      const geojson = await exportGeoJSON();
+      const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `signal-strength-${new Date().toISOString().slice(0, 10)}.geojson`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      pushStatus('GeoJSON exported');
+    } catch (err) {
+      pushStatus(`Export failed: ${err?.message || err}`);
+    }
   }
 
   const positions = readings.map((r) => [r.lat, r.lng]);
+  const visibleReadings = readings.length > MAX_MARKERS ? readings.slice(-MAX_MARKERS) : readings;
 
   return (
     <div className="app">
@@ -295,15 +372,17 @@ export default function App() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <MapAutoPan position={currentPosition} />
+          <MapFollowController position={currentPosition} enabled={followMode} onUserDrag={handleDisableFollow} />
           {positions.length > 1 && <Polyline positions={positions} color="#3b82f6" weight={3} />}
-          {readings.map((r, idx) => (
-            <Marker key={idx} position={[r.lat, r.lng]} icon={createSignalIcon(r.rsrp)}>
+          {visibleReadings.map((r) => (
+            <Marker key={r.id ?? `${r.timestamp}-${r.lat}-${r.lng}`} position={[r.lat, r.lng]} icon={getCachedSignalIcon(r)}>
               <Popup>
                 <div className="popup">
                   <p><strong>Type:</strong> {r.type}</p>
+                  <p><strong>Signal:</strong> <span style={{ color: getSignalColor(r) }}>{signalStrengthLabel(r)}</span></p>
                   <p><strong>RSRP:</strong> <span style={{ color: getRsrpColor(r.rsrp) }}>{r.rsrp ?? '—'} dBm</span></p>
                   <p><strong>RSRQ:</strong> <span style={{ color: getRsrqColor(r.rsrq) }}>{r.rsrq ?? '—'} dB</span></p>
+                  {r.dbm != null && <p><strong>dBm:</strong> {r.dbm}</p>}
                   <p><strong>Cell ID:</strong> {r.cellId ?? '—'}</p>
                   <p><strong>PCI:</strong> {r.pci ?? '—'}</p>
                   <p><strong>TAC:</strong> {r.tac ?? '—'}</p>
@@ -314,6 +393,14 @@ export default function App() {
             </Marker>
           ))}
         </MapContainer>
+        <button
+          type="button"
+          className={`follow-toggle ${followMode ? 'on' : ''}`}
+          onClick={() => setFollowMode((v) => !v)}
+          title={followMode ? 'Stop following GPS' : 'Follow GPS'}
+        >
+          {followMode ? 'Following' : 'Follow'}
+        </button>
       </div>
 
       <div className="status-history">
@@ -351,6 +438,9 @@ export default function App() {
       <footer className="app-footer">
         <p>
           Grant Location & Phone permissions for full cell metrics. Data is stored locally on your device.
+          {readings.length > MAX_MARKERS && (
+            <> Showing last {MAX_MARKERS} markers; full route drawn as line.</>
+          )}
         </p>
       </footer>
     </div>

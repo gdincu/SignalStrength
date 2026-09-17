@@ -7,18 +7,20 @@ import android.os.Build;
 import android.telephony.CellIdentityGsm;
 import android.telephony.CellIdentityLte;
 import android.telephony.CellIdentityNr;
+import android.telephony.CellIdentityWcdma;
 import android.telephony.CellInfo;
 import android.telephony.CellInfoGsm;
 import android.telephony.CellInfoLte;
 import android.telephony.CellInfoNr;
+import android.telephony.CellInfoWcdma;
 import android.telephony.CellSignalStrengthGsm;
 import android.telephony.CellSignalStrengthLte;
 import android.telephony.CellSignalStrengthNr;
+import android.telephony.CellSignalStrengthWcdma;
 import android.telephony.TelephonyManager;
 
 import androidx.core.app.ActivityCompat;
 
-import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -65,7 +67,6 @@ public class TelephonyPlugin extends Plugin {
             return;
         }
 
-        JSArray cells = new JSArray();
         CellInfo registeredCell = null;
 
         // Prefer the registered cell tower.
@@ -76,22 +77,17 @@ public class TelephonyPlugin extends Plugin {
             }
         }
 
-        // Build the primary metrics from the registered cell.
+        // Build the primary metrics from the registered cell only.
+        // Neighbor cells are intentionally not returned: the JS side only
+        // uses `registered`, and returning the full list bloated the bridge
+        // and IndexedDB when persisted per-second in `raw`.
         JSObject primary = new JSObject();
         if (registeredCell != null) {
             populateCellData(registeredCell, primary);
         }
 
-        // Build a list of all observed cells for neighbor awareness.
-        for (CellInfo info : cellInfoList) {
-            JSObject cellObj = new JSObject();
-            populateCellData(info, cellObj);
-            cells.put(cellObj);
-        }
-
         JSObject result = new JSObject();
         result.put("registered", primary);
-        result.put("allCells", cells);
         result.put("timestamp", System.currentTimeMillis());
         call.resolve(result);
     }
@@ -116,12 +112,13 @@ public class TelephonyPlugin extends Plugin {
             out.put("type", "NR");
             out.put("mcc", identity.getMccString());
             out.put("mnc", identity.getMncString());
-            out.put("tac", identity.getTac() != Integer.MAX_VALUE ? identity.getTac() : null);
-            out.put("pci", identity.getPci() != Integer.MAX_VALUE ? identity.getPci() : null);
-            out.put("nrarfcn", identity.getNrarfcn() != Integer.MAX_VALUE ? identity.getNrarfcn() : null);
-            out.put("ssRsrp", signal.getSsRsrp() != Integer.MAX_VALUE ? signal.getSsRsrp() : null);
-            out.put("ssRsrq", signal.getSsRsrq() != Integer.MAX_VALUE ? signal.getSsRsrq() : null);
-            out.put("ssSinr", signal.getSsSinr() != Integer.MAX_VALUE ? signal.getSsSinr() : null);
+            out.put("tac", identity.getTac() != CellInfo.UNAVAILABLE ? identity.getTac() : null);
+            out.put("pci", identity.getPci() != CellInfo.UNAVAILABLE ? identity.getPci() : null);
+            out.put("nci", identity.getNci() != CellInfo.UNAVAILABLE_LONG ? identity.getNci() : null);
+            out.put("nrarfcn", identity.getNrarfcn() != CellInfo.UNAVAILABLE ? identity.getNrarfcn() : null);
+            out.put("ssRsrp", signal.getSsRsrp() != CellInfo.UNAVAILABLE ? signal.getSsRsrp() : null);
+            out.put("ssRsrq", signal.getSsRsrq() != CellInfo.UNAVAILABLE ? signal.getSsRsrq() : null);
+            out.put("ssSinr", signal.getSsSinr() != CellInfo.UNAVAILABLE ? signal.getSsSinr() : null);
         } else if (info instanceof CellInfoLte) {
             CellInfoLte lte = (CellInfoLte) info;
             CellIdentityLte identity = lte.getCellIdentity();
@@ -141,6 +138,21 @@ public class TelephonyPlugin extends Plugin {
             out.put("asu", signal.getAsuLevel() != -1 ? signal.getAsuLevel() : null);
             out.put("level", signal.getLevel());
             out.put("dbm", signal.getDbm());
+        } else if (info instanceof CellInfoWcdma) {
+            CellInfoWcdma wcdma = (CellInfoWcdma) info;
+            CellIdentityWcdma identity = wcdma.getCellIdentity();
+            CellSignalStrengthWcdma signal = wcdma.getCellSignalStrength();
+
+            out.put("type", "WCDMA");
+            out.put("mcc", identity.getMcc() != CellInfo.UNAVAILABLE ? identity.getMcc() : null);
+            out.put("mnc", identity.getMnc() != CellInfo.UNAVAILABLE ? identity.getMnc() : null);
+            out.put("lac", identity.getLac() != CellInfo.UNAVAILABLE ? identity.getLac() : null);
+            out.put("cid", identity.getCid() != CellInfo.UNAVAILABLE ? identity.getCid() : null);
+            out.put("uarfcn", identity.getUarfcn() != CellInfo.UNAVAILABLE ? identity.getUarfcn() : null);
+            out.put("psc", identity.getPsc() != CellInfo.UNAVAILABLE ? identity.getPsc() : null);
+            out.put("asu", signal.getAsuLevel() != -1 ? signal.getAsuLevel() : null);
+            out.put("dbm", signal.getDbm());
+            out.put("level", signal.getLevel());
         } else if (info instanceof CellInfoGsm) {
             CellInfoGsm gsm = (CellInfoGsm) info;
             CellIdentityGsm identity = gsm.getCellIdentity();

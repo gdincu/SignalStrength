@@ -22,23 +22,18 @@ export async function exportGeoJSON() {
   const readings = await getReadings();
   return {
     type: 'FeatureCollection',
-    features: readings.map((r) => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Point',
-        coordinates: [r.lng, r.lat],
-      },
-      properties: {
-        rsrp: r.rsrp,
-        rsrq: r.rsrq,
-        cellId: r.cellId,
-        type: r.type,
-        timestamp: r.timestamp,
-        pci: r.pci,
-        tac: r.tac,
-        mcc: r.mcc,
-        mnc: r.mnc,
-      },
-    })),
+    // Export every stored field (accuracy, nci/cid, sinr/dbm/level,
+    // arfcns, error, …) — not just the LTE/NR subset.
+    features: readings.map((r) => {
+      const { lat, lng, ...props } = r;
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [lng, lat],
+        },
+        properties: { ...props },
+      };
+    }),
   };
 }
