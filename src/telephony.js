@@ -7,7 +7,7 @@ export async function getNetworkMetrics() {
     return await Telephony.getNetworkMetrics();
   } catch (error) {
     console.error('Telephony plugin error:', error);
-    return null;
+    return { error: error?.message || String(error) };
   }
 }
 
@@ -16,7 +16,16 @@ export async function requestTelephonyPermissions() {
     return await Telephony.requestPermissions();
   } catch (error) {
     console.error('Permission request error:', error);
-    return { granted: false };
+    return { granted: false, error: error?.message || String(error) };
+  }
+}
+
+export async function checkTelephonyPermissions() {
+  try {
+    return await Telephony.checkPermissions();
+  } catch (error) {
+    console.error('Permission check error:', error);
+    return { granted: false, error: error?.message || String(error) };
   }
 }
 

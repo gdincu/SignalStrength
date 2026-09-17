@@ -93,10 +93,9 @@ public class TelephonyPlugin extends Plugin {
 
     @PluginMethod
     public void requestPermissions(PluginCall call) {
-        if (hasTelephonyPermissions()) {
-            JSObject res = new JSObject();
-            res.put("granted", true);
-            call.resolve(res);
+        JSObject status = getPermissionStatus();
+        if (status.getBoolean("granted", false)) {
+            call.resolve(status);
             return;
         }
 
@@ -106,9 +105,12 @@ public class TelephonyPlugin extends Plugin {
 
     @PermissionCallback
     private void telephonyPermissionCallback(PluginCall call) {
-        JSObject res = new JSObject();
-        res.put("granted", hasTelephonyPermissions());
-        call.resolve(res);
+        call.resolve(getPermissionStatus());
+    }
+
+    @PluginMethod
+    public void checkPermissions(PluginCall call) {
+        call.resolve(getPermissionStatus());
     }
 
     private void populateCellData(CellInfo info, JSObject out) {
@@ -165,11 +167,22 @@ public class TelephonyPlugin extends Plugin {
         }
     }
 
-    private boolean hasTelephonyPermissions() {
+    private JSObject getPermissionStatus() {
         Context ctx = getContext();
         boolean fineLocation = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarseLocation = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean phoneState = ActivityCompat.checkSelfPermission(ctx, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
-        return (fineLocation || coarseLocation) && phoneState;
+
+        JSObject res = new JSObject();
+        res.put("fineLocation", fineLocation);
+        res.put("coarseLocation", coarseLocation);
+        res.put("phoneState", phoneState);
+        res.put("granted", (fineLocation || coarseLocation) && phoneState);
+        return res;
+    }
+
+    private boolean hasTelephonyPermissions() {
+        JSObject status = getPermissionStatus();
+        return status.getBoolean("granted", false);
     }
 }

@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { saveReading, getReadings, clearReadings, exportGeoJSON } from './db';
-import { getNetworkMetrics, normalizeSignal, getRsrpColor, requestTelephonyPermissions } from './telephony';
+import { getNetworkMetrics, normalizeSignal, getRsrpColor, requestTelephonyPermissions, checkTelephonyPermissions } from './telephony';
 import './App.css';
 
 // Fix Leaflet default marker icons in bundled builds.
@@ -60,7 +60,12 @@ export default function App() {
       const granted = telephonyPerm.granted === true;
       setPermissionGranted(granted);
       if (!granted) {
-        setStatus('Permissions required: Location & Phone state.');
+        const details = [
+          `fine=${telephonyPerm.fineLocation}`,
+          `coarse=${telephonyPerm.coarseLocation}`,
+          `phone=${telephonyPerm.phoneState}`,
+        ].join(' ');
+        setStatus(`Permissions required (${details})`);
       } else {
         setStatus('Permissions granted');
         if (shouldStartAfterPermission.current) {
@@ -71,7 +76,7 @@ export default function App() {
     } catch (err) {
       console.warn('Permission request failed', err);
       setPermissionGranted(false);
-      setStatus('Permission request failed');
+      setStatus(`Permission request failed: ${err.message || err}`);
     }
   }
 
@@ -87,6 +92,13 @@ export default function App() {
   async function capturePoint(position) {
     const { latitude: lat, longitude: lng, accuracy } = position.coords;
     const metrics = await getNetworkMetrics();
+
+    if (metrics?.error) {
+      setCurrentPosition([lat, lng]);
+      setStatus(`Cell error: ${metrics.error}`);
+      return;
+    }
+
     const signal = normalizeSignal(metrics);
 
     const reading = {
@@ -135,15 +147,23 @@ export default function App() {
   }
 
   function captureFromGeolocation() {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => capturePoint(pos),
-        (err) => setStatus(`GPS error: ${err.message}`),
-        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-      );
-    } else {
+    if (!navigator.geolocation) {
       setStatus('Geolocation not supported on this device.');
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => capturePoint(pos),
+      (err) => {
+        const codeNames = {
+          1: 'Permission denied',
+          2: 'Position unavailable',
+          3: 'Timeout',
+        };
+        setStatus(`GPS error ${err.code}: ${codeNames[err.code] || err.message}`);
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+    );
   }
 
   function stopTracking() {
