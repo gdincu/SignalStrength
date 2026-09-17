@@ -94,8 +94,10 @@ To enable the download page:
 
 1. Push this repo to GitHub.
 2. Go to **Settings → Pages**.
-3. Set source to **Deploy from a branch** and select `gh-pages`.
+3. Set source to **Deploy from a branch** and select **`gh-pages`**.
 4. Visit `https://yourusername.github.io/SignalStrength`.
+
+> ⚠️ **Important:** Do not select **GitHub Actions** as the Pages source, and do not serve the `main` branch. The workflow publishes only the generated download page + APK to the `gh-pages` branch.
 
 ## Customization
 
@@ -113,6 +115,14 @@ To enable the download page:
   - Lime: -95 dBm ≤ RSRP < -80 dBm
   - Yellow: -110 dBm ≤ RSRP < -95 dBm
   - Red: RSRP < -110 dBm
+
+## Troubleshooting
+
+### `main.jsx` 404 on GitHub Pages
+
+This happens when Pages is serving the `main` branch instead of `gh-pages`. The source `index.html` references `/src/main.jsx`, which only exists during local development.
+
+**Fix:** In **Settings → Pages**, set the source to **Deploy from a branch → `gh-pages`**.
 
 ## License
 
