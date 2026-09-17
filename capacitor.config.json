@@ -1,0 +1,5 @@
+{
+  "appId": "com.yourname.cellmapper",
+  "appName": "Cell Mapper",
+  "webDir": "dist"
+}
