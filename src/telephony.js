@@ -111,3 +111,11 @@ export function getRsrpColor(rsrp) {
   if (rsrp >= -110) return '#eab308'; // Fair (yellow)
   return '#ef4444'; // Poor (red)
 }
+
+export function getRsrqColor(rsrq) {
+  if (rsrq == null) return '#9ca3af';
+  if (rsrq >= -10) return '#22c55e'; // Excellent (green)
+  if (rsrq >= -15) return '#84cc16'; // Good (lime)
+  if (rsrq >= -20) return '#eab308'; // Fair (yellow)
+  return '#ef4444'; // Poor (red)
+}

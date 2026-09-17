@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { saveReading, getReadings, clearReadings, exportGeoJSON } from './db';
-import { getNetworkMetrics, normalizeSignal, getRsrpColor, requestTelephonyPermissions, checkTelephonyPermissions } from './telephony';
+import { getNetworkMetrics, normalizeSignal, getRsrpColor, getRsrqColor, requestTelephonyPermissions, checkTelephonyPermissions } from './telephony';
 import './App.css';
 
 // Fix Leaflet default marker icons in bundled builds.
@@ -50,6 +50,8 @@ export default function App() {
   const watchId = useRef(null);
   const intervalRef = useRef(null);
   const shouldStartAfterPermission = useRef(false);
+  const permissionGrantedRef = useRef(false);
+  const permissionRequestInFlight = useRef(false);
 
   useEffect(() => {
     loadHistory();
@@ -72,6 +74,7 @@ export default function App() {
     try {
       const telephonyPerm = await checkTelephonyPermissions();
       const granted = telephonyPerm.granted === true;
+      permissionGrantedRef.current = granted;
       setPermissionGranted(granted);
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
@@ -84,9 +87,12 @@ export default function App() {
   }
 
   async function requestPermissions() {
+    if (permissionRequestInFlight.current) return;
+    permissionRequestInFlight.current = true;
     try {
       const telephonyPerm = await requestTelephonyPermissions();
       const granted = telephonyPerm.granted === true;
+      permissionGrantedRef.current = granted;
       setPermissionGranted(granted);
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
@@ -96,13 +102,16 @@ export default function App() {
         pushStatus('Permissions granted');
         if (shouldStartAfterPermission.current) {
           shouldStartAfterPermission.current = false;
-          startTracking();
+          beginTracking();
         }
       }
     } catch (err) {
       console.warn('Permission request failed', err);
+      permissionGrantedRef.current = false;
       setPermissionGranted(false);
       pushStatus(`Permission request failed: ${err.message || err}`);
+    } finally {
+      permissionRequestInFlight.current = false;
     }
   }
 
@@ -156,12 +165,18 @@ export default function App() {
   }
 
   function startTracking() {
-    if (!permissionGranted) {
+    if (intervalRef.current) return;
+    if (!permissionGrantedRef.current) {
       shouldStartAfterPermission.current = true;
       requestPermissions();
       return;
     }
 
+    beginTracking();
+  }
+
+  function beginTracking() {
+    if (intervalRef.current) return;
     setIsTracking(true);
     pushStatus('Tracking started…');
 
@@ -193,8 +208,11 @@ export default function App() {
   }
 
   function stopTracking() {
+    const wasActive = intervalRef.current != null;
     setIsTracking(false);
-    pushStatus('Tracking paused');
+    if (wasActive) {
+      pushStatus('Tracking paused');
+    }
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -248,7 +266,7 @@ export default function App() {
         </div>
         <div className="metric">
           <strong>RSRQ</strong>
-          <span>{latest?.rsrq != null ? `${latest.rsrq} dB` : '— dB'}</span>
+          <span style={{ color: getRsrqColor(latest?.rsrq) }}>{latest?.rsrq != null ? `${latest.rsrq} dB` : '— dB'}</span>
         </div>
         <div className="metric">
           <strong>Cell ID</strong>
@@ -289,8 +307,8 @@ export default function App() {
               <Popup>
                 <div className="popup">
                   <p><strong>Type:</strong> {r.type}</p>
-                  <p><strong>RSRP:</strong> {r.rsrp ?? '—'} dBm</p>
-                  <p><strong>RSRQ:</strong> {r.rsrq ?? '—'} dB</p>
+                  <p><strong>RSRP:</strong> <span style={{ color: getRsrpColor(r.rsrp) }}>{r.rsrp ?? '—'} dBm</span></p>
+                  <p><strong>RSRQ:</strong> <span style={{ color: getRsrqColor(r.rsrq) }}>{r.rsrq ?? '—'} dB</span></p>
                   <p><strong>Cell ID:</strong> {r.cellId ?? '—'}</p>
                   <p><strong>PCI:</strong> {r.pci ?? '—'}</p>
                   <p><strong>TAC:</strong> {r.tac ?? '—'}</p>
