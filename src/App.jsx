@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
-import { Geolocation } from '@capacitor/geolocation';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -47,6 +46,7 @@ export default function App() {
 
   const watchId = useRef(null);
   const intervalRef = useRef(null);
+  const shouldStartAfterPermission = useRef(false);
 
   useEffect(() => {
     loadHistory();
@@ -56,18 +56,22 @@ export default function App() {
 
   async function requestPermissions() {
     try {
-      const [geoPerm, telephonyPerm] = await Promise.all([
-        Geolocation.requestPermissions(),
-        requestTelephonyPermissions(),
-      ]);
-      const granted = geoPerm.location === 'granted' && telephonyPerm.granted === true;
+      const telephonyPerm = await requestTelephonyPermissions();
+      const granted = telephonyPerm.granted === true;
       setPermissionGranted(granted);
       if (!granted) {
         setStatus('Permissions required: Location & Phone state.');
+      } else {
+        setStatus('Permissions granted');
+        if (shouldStartAfterPermission.current) {
+          shouldStartAfterPermission.current = false;
+          startTracking();
+        }
       }
     } catch (err) {
       console.warn('Permission request failed', err);
       setPermissionGranted(false);
+      setStatus('Permission request failed');
     }
   }
 
@@ -115,6 +119,7 @@ export default function App() {
 
   function startTracking() {
     if (!permissionGranted) {
+      shouldStartAfterPermission.current = true;
       requestPermissions();
       return;
     }
