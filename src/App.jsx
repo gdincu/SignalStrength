@@ -41,6 +41,9 @@ export default function App() {
   const [readings, setReadings] = useState([]);
   const [currentPosition, setCurrentPosition] = useState([51.505, -0.09]);
   const [status, setStatus] = useState('Ready');
+  const [statusHistory, setStatusHistory] = useState([
+    { id: 0, time: new Date().toLocaleTimeString(), text: 'Ready' },
+  ]);
   const [latest, setLatest] = useState(null);
   const [permissionGranted, setPermissionGranted] = useState(false);
 
@@ -54,6 +57,17 @@ export default function App() {
     return () => stopTracking();
   }, []);
 
+  function pushStatus(message) {
+    setStatus(message);
+    setStatusHistory((prev) =>
+      [{ id: Date.now() + Math.random(), time: new Date().toLocaleTimeString(), text: message }, ...prev].slice(0, 10)
+    );
+  }
+
+  function clearStatusHistory() {
+    setStatusHistory([]);
+  }
+
   async function checkPermissions() {
     try {
       const telephonyPerm = await checkTelephonyPermissions();
@@ -62,7 +76,7 @@ export default function App() {
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
         const suffix = telephonyPerm.error ? ` (${telephonyPerm.error})` : '';
-        setStatus(`Permissions required (${details})${suffix} — tap Start to grant`);
+        pushStatus(`Permissions required (${details})${suffix} — tap Start to grant`);
       }
     } catch (err) {
       console.warn('Permission check failed', err);
@@ -77,9 +91,9 @@ export default function App() {
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
         const suffix = telephonyPerm.error ? ` (${telephonyPerm.error})` : '';
-        setStatus(`Permissions required (${details})${suffix}`);
+        pushStatus(`Permissions required (${details})${suffix}`);
       } else {
-        setStatus('Permissions granted');
+        pushStatus('Permissions granted');
         if (shouldStartAfterPermission.current) {
           shouldStartAfterPermission.current = false;
           startTracking();
@@ -88,7 +102,7 @@ export default function App() {
     } catch (err) {
       console.warn('Permission request failed', err);
       setPermissionGranted(false);
-      setStatus(`Permission request failed: ${err.message || err}`);
+      pushStatus(`Permission request failed: ${err.message || err}`);
     }
   }
 
@@ -107,7 +121,7 @@ export default function App() {
 
     if (metrics?.error) {
       setCurrentPosition([lat, lng]);
-      setStatus(`Cell error: ${metrics.error}`);
+      pushStatus(`Cell error: ${metrics.error}`);
       return;
     }
 
@@ -133,7 +147,7 @@ export default function App() {
     setReadings((prev) => [...prev, reading]);
     setCurrentPosition([lat, lng]);
     setLatest(reading);
-    setStatus(`Captured ${signal?.type || '—'} @ ${rsrpLabel(signal?.rsrp)}`);
+    pushStatus(`Captured ${signal?.type || '—'} @ ${rsrpLabel(signal?.rsrp)}`);
   }
 
   function rsrpLabel(rsrp) {
@@ -149,7 +163,7 @@ export default function App() {
     }
 
     setIsTracking(true);
-    setStatus('Tracking started…');
+    pushStatus('Tracking started…');
 
     // Capture immediately, then every second if geolocation hasn't changed.
     captureFromGeolocation();
@@ -160,7 +174,7 @@ export default function App() {
 
   function captureFromGeolocation() {
     if (!navigator.geolocation) {
-      setStatus('Geolocation not supported on this device.');
+      pushStatus('Geolocation not supported on this device.');
       return;
     }
 
@@ -172,7 +186,7 @@ export default function App() {
           2: 'Position unavailable',
           3: 'Timeout',
         };
-        setStatus(`GPS error ${err.code}: ${codeNames[err.code] || err.message}`);
+        pushStatus(`GPS error ${err.code}: ${codeNames[err.code] || err.message}`);
       },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
     );
@@ -180,7 +194,7 @@ export default function App() {
 
   function stopTracking() {
     setIsTracking(false);
-    setStatus('Tracking paused');
+    pushStatus('Tracking paused');
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -196,7 +210,7 @@ export default function App() {
     await clearReadings();
     setReadings([]);
     setLatest(null);
-    setStatus('History cleared');
+    pushStatus('History cleared');
   }
 
   async function handleExport() {
@@ -208,7 +222,7 @@ export default function App() {
     a.download = `signal-strength-${new Date().toISOString().slice(0, 10)}.geojson`;
     a.click();
     URL.revokeObjectURL(url);
-    setStatus('GeoJSON exported');
+    pushStatus('GeoJSON exported');
   }
 
   const positions = readings.map((r) => [r.lat, r.lng]);
@@ -287,6 +301,27 @@ export default function App() {
             </Marker>
           ))}
         </MapContainer>
+      </div>
+
+      <div className="status-history">
+        <div className="status-history-header">
+          <strong>Status log</strong>
+          <button onClick={clearStatusHistory} className="secondary small">
+            Clear log
+          </button>
+        </div>
+        {statusHistory.length === 0 ? (
+          <p className="status-history-empty">No messages yet.</p>
+        ) : (
+          <ul>
+            {statusHistory.map((entry) => (
+              <li key={entry.id}>
+                <span className="status-time">{entry.time}</span>
+                <span>{entry.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <footer className="app-footer">

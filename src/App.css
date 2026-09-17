@@ -160,6 +160,72 @@
   text-align: center;
 }
 
+.status-history {
+  padding: 10px 16px;
+  background: white;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.status-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.status-history-header strong {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.status-history button.small {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.status-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 140px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-history li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  word-break: break-word;
+}
+
+.status-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-history-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .app-footer p {
   margin: 0;
 }
