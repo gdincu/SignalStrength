@@ -50,9 +50,23 @@ export default function App() {
 
   useEffect(() => {
     loadHistory();
-    requestPermissions();
+    checkPermissions();
     return () => stopTracking();
   }, []);
+
+  async function checkPermissions() {
+    try {
+      const telephonyPerm = await checkTelephonyPermissions();
+      const granted = telephonyPerm.granted === true;
+      setPermissionGranted(granted);
+      if (!granted) {
+        const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
+        setStatus(`Permissions required (${details}) — tap Start to grant`);
+      }
+    } catch (err) {
+      console.warn('Permission check failed', err);
+    }
+  }
 
   async function requestPermissions() {
     try {
@@ -60,11 +74,7 @@ export default function App() {
       const granted = telephonyPerm.granted === true;
       setPermissionGranted(granted);
       if (!granted) {
-        const details = [
-          `fine=${telephonyPerm.fineLocation}`,
-          `coarse=${telephonyPerm.coarseLocation}`,
-          `phone=${telephonyPerm.phoneState}`,
-        ].join(' ');
+        const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
         setStatus(`Permissions required (${details})`);
       } else {
         setStatus('Permissions granted');

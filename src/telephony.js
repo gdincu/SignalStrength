@@ -13,7 +13,9 @@ export async function getNetworkMetrics() {
 
 export async function requestTelephonyPermissions() {
   try {
-    return await Telephony.requestPermissions();
+    const status = await Telephony.requestPermissions();
+    const granted = status.location === 'granted' && status.phone === 'granted';
+    return { granted, location: status.location, phone: status.phone };
   } catch (error) {
     console.error('Permission request error:', error);
     return { granted: false, error: error?.message || String(error) };
@@ -22,7 +24,9 @@ export async function requestTelephonyPermissions() {
 
 export async function checkTelephonyPermissions() {
   try {
-    return await Telephony.checkPermissions();
+    const status = await Telephony.checkPermissions();
+    const granted = status.location === 'granted' && status.phone === 'granted';
+    return { granted, location: status.location, phone: status.phone };
   } catch (error) {
     console.error('Permission check error:', error);
     return { granted: false, error: error?.message || String(error) };
