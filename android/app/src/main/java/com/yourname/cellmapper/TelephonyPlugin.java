@@ -99,7 +99,7 @@ public class TelephonyPlugin extends Plugin {
     @PluginMethod
     public void requestPermissions(PluginCall call) {
         JSObject status = buildPermissionStatus();
-        if (Boolean.TRUE.equals(status.get("granted"))) {
+        if (status.getBoolean("granted", false)) {
             call.resolve(status);
             return;
         }
