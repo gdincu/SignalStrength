@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Cell Mapper</string>
-    <string name="title_activity_main">Cell Mapper</string>
+    <string name="app_name">SignalStrength</string>
+    <string name="title_activity_main">SignalStrength</string>
     <string name="package_name">com.yourname.cellmapper</string>
     <string name="custom_url_scheme">com.yourname.cellmapper</string>
 </resources>
