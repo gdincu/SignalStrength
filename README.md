@@ -93,9 +93,10 @@ The workflow in `.github/workflows/deploy.yml` runs on every push to `main`:
 To enable the download page:
 
 1. Push this repo to GitHub.
-2. Go to **Settings → Pages**.
-3. Set source to **Deploy from a branch** and select **`gh-pages`**.
-4. Visit `https://yourusername.github.io/SignalStrength`.
+2. Go to **Settings → Actions → General → Workflow permissions** and select **Read and write permissions**.
+3. Go to **Settings → Pages**.
+4. Set source to **Deploy from a branch** and select **`gh-pages`**.
+5. Visit `https://yourusername.github.io/SignalStrength`.
 
 > ⚠️ **Important:** Do not select **GitHub Actions** as the Pages source, and do not serve the `main` branch. The workflow publishes only the generated download page + APK to the `gh-pages` branch.
 
@@ -123,6 +124,12 @@ To enable the download page:
 This happens when Pages is serving the `main` branch instead of `gh-pages`. The source `index.html` references `/src/main.jsx`, which only exists during local development.
 
 **Fix:** In **Settings → Pages**, set the source to **Deploy from a branch → `gh-pages`**.
+
+### Deploy step fails with `403` / `Permission denied to github-actions[bot]`
+
+The workflow needs write permission to push the `gh-pages` branch.
+
+**Fix:** In **Settings → Actions → General → Workflow permissions**, select **Read and write permissions**.
 
 ## License
 
