@@ -1,16 +1,119 @@
-# React + Vite
+# SignalStrength — Cell Tower & Signal Strength Mapper
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A React + Capacitor Android app that maps cellular signal strength (LTE/5G/NR/GSM) using the phone's GPS and Android's `TelephonyManager`. Data is stored locally in IndexedDB and can be exported as GeoJSON.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Real-time cell metrics** — Reads RSRP, RSRQ, PCI, TAC, MCC/MNC, CI, ASU, and more from Android's `TelephonyManager.getAllCellInfo()`.
+- **GPS tracking** — Records Lat/Lng alongside signal data every second while tracking.
+- **Offline storage** — Uses Dexie.js/IndexedDB to store readings on the device.
+- **Interactive map** — Leaflet map with colored markers (green/yellow/red by RSRP) and a route polyline.
+- **GeoJSON export** — Download your captured data as a GeoJSON file.
+- **CI/CD APK distribution** — GitHub Actions builds a debug APK and hosts a download page on GitHub Pages.
 
-## React Compiler
+## Architecture
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend:** React + Vite
+- **Native bridge:** Capacitor
+- **Custom native plugin:** `TelephonyPlugin.java` (bridges to Android `TelephonyManager`)
+- **Map:** Leaflet + React-Leaflet
+- **Local database:** Dexie.js
+- **CI/CD:** GitHub Actions → GitHub Pages
 
-## Expanding the Oxlint configuration
+## Project structure
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```
+SignalStrength/
+├── src/
+│   ├── App.jsx           # Main UI and tracking loop
+│   ├── db.js             # Dexie.js database and GeoJSON export
+│   ├── telephony.js      # Capacitor bridge to TelephonyPlugin
+│   └── ...
+├── android/
+│   └── app/src/main/java/com/yourname/cellmapper/
+│       └── TelephonyPlugin.java
+├── .github/workflows/
+│   └── deploy.yml        # Build & deploy APK to gh-pages
+└── capacitor.config.json
+```
+
+## Required Android permissions
+
+The app requests these permissions at runtime:
+
+- `ACCESS_FINE_LOCATION`
+- `ACCESS_COARSE_LOCATION`
+- `READ_PHONE_STATE`
+
+Location permission is required because cell tower data can infer device location.
+
+## Local development
+
+```bash
+npm install
+npm run dev       # Start the Vite dev server
+```
+
+To preview the production web build:
+
+```bash
+npm run build
+npm run preview
+```
+
+## Build the Android app
+
+Make sure you have:
+
+- Android Studio
+- JDK 17 or newer
+- Android SDK
+
+```bash
+npm run build
+npx cap sync android
+npx cap open android
+```
+
+In Android Studio, build the debug APK with **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
+
+## CI/CD (GitHub Actions)
+
+The workflow in `.github/workflows/deploy.yml` runs on every push to `main`:
+
+1. Installs Node.js 22 and dependencies
+2. Builds the React app
+3. Syncs Capacitor with the Android project
+4. Installs Java 17
+5. Builds a debug APK with Gradle
+6. Copies the APK to `public_pages/SignalStrength.apk`
+7. Generates a download page
+8. Publishes to the `gh-pages` branch
+
+To enable the download page:
+
+1. Push this repo to GitHub.
+2. Go to **Settings → Pages**.
+3. Set source to **Deploy from a branch** and select `gh-pages`.
+4. Visit `https://yourusername.github.io/SignalStrength`.
+
+## Customization
+
+- Change the app ID from `com.yourname.cellmapper` to your own reverse-domain identifier in:
+  - `capacitor.config.json`
+  - `android/app/build.gradle`
+- The CI builds an unsigned debug APK. For Play Store release, configure a signing keystore and use `assembleRelease`.
+
+## Notes
+
+- The web preview shows the map and UI, but cell signal metrics are only available inside the Android app via the native plugin.
+- OpenStreetMap tiles require an internet connection.
+- Signal strength color coding:
+  - Green: RSRP ≥ -80 dBm
+  - Lime: -95 dBm ≤ RSRP < -80 dBm
+  - Yellow: -110 dBm ≤ RSRP < -95 dBm
+  - Red: RSRP < -110 dBm
+
+## License
+
+MIT
