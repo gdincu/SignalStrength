@@ -14,23 +14,31 @@ export async function getNetworkMetrics() {
 export async function requestTelephonyPermissions() {
   try {
     const status = await Telephony.requestPermissions();
-    const granted = status.location === 'granted' && status.phone === 'granted';
-    return { granted, location: status.location, phone: status.phone };
+    return normalizePermissionStatus(status);
   } catch (error) {
     console.error('Permission request error:', error);
-    return { granted: false, error: error?.message || String(error) };
+    return { granted: false, location: 'prompt', phone: 'prompt', error: error?.message || String(error) };
   }
 }
 
 export async function checkTelephonyPermissions() {
   try {
     const status = await Telephony.checkPermissions();
-    const granted = status.location === 'granted' && status.phone === 'granted';
-    return { granted, location: status.location, phone: status.phone };
+    return normalizePermissionStatus(status);
   } catch (error) {
     console.error('Permission check error:', error);
-    return { granted: false, error: error?.message || String(error) };
+    return { granted: false, location: 'prompt', phone: 'prompt', error: error?.message || String(error) };
   }
+}
+
+// Capacitor's built-in checkPermissions/requestPermissions return one entry
+// per @Permission alias: granted | denied | prompt | prompt-with-rationale.
+// Only 'granted' counts as granted — everything else must trigger a request.
+function normalizePermissionStatus(status) {
+  const location = status?.location ?? 'prompt';
+  const phone = status?.phone ?? 'prompt';
+  const granted = location === 'granted' && phone === 'granted';
+  return { granted, location, phone };
 }
 
 export function normalizeSignal(metric) {

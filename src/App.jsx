@@ -61,7 +61,8 @@ export default function App() {
       setPermissionGranted(granted);
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
-        setStatus(`Permissions required (${details}) — tap Start to grant`);
+        const suffix = telephonyPerm.error ? ` (${telephonyPerm.error})` : '';
+        setStatus(`Permissions required (${details})${suffix} — tap Start to grant`);
       }
     } catch (err) {
       console.warn('Permission check failed', err);
@@ -75,7 +76,8 @@ export default function App() {
       setPermissionGranted(granted);
       if (!granted) {
         const details = `location=${telephonyPerm.location} phone=${telephonyPerm.phone}`;
-        setStatus(`Permissions required (${details})`);
+        const suffix = telephonyPerm.error ? ` (${telephonyPerm.error})` : '';
+        setStatus(`Permissions required (${details})${suffix}`);
       } else {
         setStatus('Permissions granted');
         if (shouldStartAfterPermission.current) {
